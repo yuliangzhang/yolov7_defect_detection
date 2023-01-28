@@ -95,8 +95,8 @@ def test(data,
     
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    # names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
-    names = {0: "chong_kong", 1:"han_feng", 2: "yue_ya_wan", 3: "shui_ban", 4: "you_ban"}
+    names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
+    # names = {0: "chong_kong", 1:"han_feng", 2: "yue_ya_wan", 3: "shui_ban", 4: "you_ban"}
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
@@ -293,10 +293,10 @@ def test(data,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
     # parser.add_argument('--weights', nargs='+', type=str, default='runs/train/exp_tiny_defect2/weights/last.pt', help='model.pt path(s)')
-    parser.add_argument('--weights', nargs='+', type=str, default='runs/train/exp_tiny_simpler2/weights/last.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='runs/train/exp_tiny_simpler16/weights/best.pt', help='model.pt path(s)')
     # parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
 
-    parser.add_argument('--data', type=str, default='defect_datasets/archive/YOLODataset_split3/dataset.yaml', help='*.data path')
+    parser.add_argument('--data', type=str, default='/home/ubuntu/data/defect_data/YOLODataset/dataset.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     # parser.add_argument('--conf-thres', type=float, default=0.01, help='object confidence threshold')
@@ -304,7 +304,7 @@ if __name__ == '__main__':
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
     parser.add_argument('--task', default='val', help='train, val, test, speed or study')
-    parser.add_argument('--device', default='1', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--single-cls', action='store_true', help='treat as single-class dataset')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--verbose', action='store_true', help='report mAP by class')

@@ -20,22 +20,8 @@ import glob
 
 class Labelme2YOLO(object):
 
-    def __init__(self, json_dir,
-                 width_split=4,
-                 height_split=2,
-                 expect_size=640,
-                 width_step=512,
-                 height_step=500,
-                 boundary_thresh=0.05
-                 ):
+    def __init__(self, json_dir):
         self._json_dir = json_dir
-        self._json_file_list = glob.glob(json_dir + "/*.json")
-        self._width_split = width_split
-        self._height_split = height_split
-        self._expect_size = expect_size
-        self._width_step = width_step
-        self._height_step = height_step
-        self._boundary_thresh = boundary_thresh
 
         self._label_id_map = self._get_label_id_map(self._json_dir)
 
@@ -56,14 +42,17 @@ class Labelme2YOLO(object):
 
     def _get_label_id_map(self, json_dir):
         label_set = set()
-
-        for json_path in self._json_file_list:
-            try:
-                data = json.load(open(json_path))
-                for shape in data['shapes']:
-                    label_set.add(shape['label'])
-            except Exception:
-                print("Open Error Filename: ", json_path)
+        json_file_list = glob.glob(json_dir + "/*/*.json")
+        for file_name in os.listdir(json_dir):
+            if file_name.endswith('json'):
+                json_path = os.path.join(json_dir, file_name)
+                # print("file_name:", file_name)
+                try:
+                    data = json.load(open(json_path))
+                    for shape in data['shapes']:
+                        label_set.add(shape['label'].split("-")[0])
+                except Exception:
+                    print("Open Error Filename: ", json_path)
 
         return OrderedDict([(label, label_id) \
                             for label_id, label in enumerate(label_set)])
@@ -95,10 +84,6 @@ class Labelme2YOLO(object):
                       file_name.endswith('.json')]
         folders = [file_name for file_name in os.listdir(self._json_dir) \
                    if os.path.isdir(os.path.join(self._json_dir, file_name))]
-
-
-
-
         train_json_names, val_json_names = self._train_test_split(folders, json_names, val_size)
 
         self._make_train_val_dir()
@@ -109,90 +94,21 @@ class Labelme2YOLO(object):
                                           (train_json_names, val_json_names)):
             for json_name in json_names:
                 json_path = os.path.join(self._json_dir, json_name)
-                image_name = json_path.replace(".json", ".bmp")
-                raw_image_path = os.path.join(self._json_dir, image_name)
                 try:
                     json_data = json.load(open(json_path))
-                    raw_img = cv2.imread(raw_image_path)
-                    raw_h, raw_w, _ = raw_img.shape
+
                     print('Converting %s for %s ...' % (json_name, target_dir.replace('/', '')))
 
-                    ## image split coordinate calculation
-                    image_split_coord_list = []
-                    for width_index in range(self._width_split):
-                        for height_index in range(self._height_split):
-                            width_start = width_index * self._width_step
-                            if (width_start + self._expect_size) > raw_w:
-                                width_end = raw_w
-                                width_start = raw_w - self._expect_size
-                            else:
-                                width_end = width_start + self._expect_size
+                    img_path = self._save_yolo_image(json_data,
+                                                     json_name,
+                                                     self._image_dir_path,
+                                                     target_dir)
 
-                            height_start = height_index * self._height_step
-
-                            if (height_start + self._expect_size) > raw_h:
-                                height_end = raw_h
-                                height_start = raw_h - self._expect_size
-                            else:
-                                height_end = height_start + self._expect_size
-
-                            image_split_coord_list.append((width_start, height_start, width_end, height_end))
-
-                    ## object box ordinate processing and converting
-                    itemlist = json_data["shapes"]
-
-                    for img_index, (width_start, height_start, width_end, height_end) in enumerate(image_split_coord_list):
-
-                        yolo_obj_list = []
-
-                        for item in itemlist:
-                            classid = item["label"]
-                            # Only select several classes
-                            xmin, ymin = item['points'][0]
-                            xmax, ymax = item['points'][1]
-
-                            if width_end < xmin:
-                                continue
-                            if height_end < ymin:
-                                continue
-                            if xmax < width_start:
-                                continue
-                            if ymax < height_start:
-                                continue
-
-                            new_xmin = max(width_start, xmin) - width_start
-                            new_ymin = max(height_start, ymin) - height_start
-                            new_xmax = min(width_end, xmax) - width_start
-                            new_ymax = min(height_end, ymax) - height_start
-
-                            obj_x_min, obj_w, obj_y_min, obj_h = new_xmin, (new_xmax - new_xmin), new_ymin, (
-                                        new_ymax - new_ymin)
-
-                            yolo_center_x = round(float((obj_x_min + obj_w / 2.0) / self._expect_size), 6)
-                            yolo_center_y = round(float((obj_y_min + obj_h / 2.0) / self._expect_size), 6)
-                            yolo_w = round(float(obj_w / self._expect_size), 6)
-                            yolo_h = round(float(obj_h / self._expect_size), 6)
-
-                            label_id = self._label_id_map[classid]
-                            if yolo_w < self._boundary_thresh or yolo_h < self._boundary_thresh:
-                                continue
-                            yolo_obj_list.append((label_id, yolo_center_x, yolo_center_y, yolo_w, yolo_h))
-                        # Only save the image with defect
-                        if len(yolo_obj_list) > 0:
-                            split_img = raw_img[height_start:height_end, width_start:width_end]
-
-                            split_img_name = json_name.replace('.json', '') + "_split_" + str(img_index) + ".jpg"
-                            img_path = os.path.join(self._image_dir_path, target_dir, split_img_name)
-
-                            cv2.imwrite(img_path, split_img)
-                            split_xml_name = split_img_name.replace('.jpg', '.json')
-                            self._save_yolo_label(split_xml_name,
-                                                  self._label_dir_path,
-                                                  target_dir,
-                                                  yolo_obj_list)
-                        else:
-                            print("This part of image has no defect")
-
+                    yolo_obj_list = self._get_yolo_object_list(json_data, img_path)
+                    self._save_yolo_label(json_name,
+                                          self._label_dir_path,
+                                          target_dir,
+                                          yolo_obj_list)
                 except Exception:
                     print("Convert Error Filename: ", json_path)
 
@@ -306,7 +222,7 @@ class Labelme2YOLO(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--json_dir', type=str, default="/home/ubuntu/data/defect_data",
+    parser.add_argument('--json_dir', type=str, default="/home/ubuntu/data/DefectData",
                         help='Please input the path of the labelme json files.')
     parser.add_argument('--val_size', type=float, nargs='?', default=0.2,
                         help='Please input the validation dataset size, for example 0.1 ')
